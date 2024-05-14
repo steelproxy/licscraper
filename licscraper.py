@@ -93,7 +93,7 @@ def run_serp_scraper(user, password, runs, pages, start, query):
             'user_agent_type': 'desktop_chrome',
             'parse': "true",
             'limit': '100',
-            'query': query,
+            'query': "site:linkedin.com " + query,
             #"start_page": str(start),
             #"pages": str(pages),
             'locale': 'en-us',
@@ -126,14 +126,6 @@ def run_serp_scraper(user, password, runs, pages, start, query):
         f"all runs completed in {(time.time() - start_time):.2f} seconds."
     )
     return profile_names
-
-def scrape_linkedin(client, queries):
-    results = set()
-    for profile in queries:
-        contact_info = client.get_profile_contact_info(profile)
-        if contact_info:
-                print(str(contact_info["email_address"]))
-    return results
 
 def get_credentials(prompt):
     """Prompt user for credentials."""
@@ -185,7 +177,28 @@ def main():
         exit(1)
 
     serp_results = run_serp_scraper(oxylabs_user, oxylabs_password, runs, pages, start_page, query)
-    linkedin_results = scrape_linkedin(client, serp_results)
+    linkedin_results = set()
+    for profile in serp_results:
+        contact_info = client.get_profile_contact_info(profile)
+        if contact_info:
+                print(profile)
+                if contact_info["email_address"]:
+                    print("\tEmail: " + str(contact_info["email_address"]))
+                    
+                if contact_info["websites"]:
+                    print("\tWebsites: ")
+                    for website in contact_info["websites"]:
+                        print("\t\t" + website["url"])
+                if contact_info["twitter"]:
+                    print("\tTwitter: " + str(contact_info["twitter"]))
+                if contact_info["ims"]:
+                    print("\tIMS: " + str(contact_info["ims"]))
+                if contact_info["phone_numbers"]:
+                    print("\tPhone numbers: ")
+                    for phone in contact_info["phone_numbers"]:
+                        print("\t\t" + str(phone))
+                print("end. \n")
+    #linkedin_results = scrape_linkedin(client, serp_results)
     
     for result in linkedin_results:
         print(str(result))
