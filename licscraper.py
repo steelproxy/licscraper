@@ -6,6 +6,7 @@ import signal
 import sys
 import time
 from linkedin_api import Linkedin
+import configparser
 
 EXAMPLE_TEXT = """example:
     python3 ./licscraper.py --oxylabs-user YOUR_OXYLABS_USERNAME --oxylabs-password YOUR_OXYLABS_PASSWORD --linkedin-user YOUR_LINKEDIN_USERNAME --linkedin-password YOUR_LINKEDIN_PASSWORD --runs 3 --pages 5 --start-page 1 --query "site:linkedin.com software engineer"
@@ -14,6 +15,8 @@ EXAMPLE_TEXT = """example:
 SCRIPT_URL = (
     "https://raw.githubusercontent.com/steelproxy/licscraper/main/licscraper.py"
 )
+
+#1sTheBest
 
 def handle_interrupt(sig, frame):
     """Handle SIGINT signal."""
@@ -37,6 +40,18 @@ def parse_arguments():
     parser.add_argument("--start-page", type=int, default=1, help="Starting page (default: 1)")
     parser.add_argument("--query", help="Search query")
     return parser.parse_args()
+
+def get_credentials_from_config():
+    """Read credentials from config file."""
+    config = configparser.ConfigParser()
+    config.read("credentials.ini")
+
+    oxylabs_user = config.get("Oxylabs", "username", fallback=None)
+    oxylabs_password = config.get("Oxylabs", "password", fallback=None)
+    linkedin_user = config.get("LinkedIn", "username", fallback=None)
+    linkedin_password = config.get("LinkedIn", "password", fallback=None)
+
+    return oxylabs_user, oxylabs_password, linkedin_user, linkedin_password
 
 def clean_linkedIn_profile_name(profile_url):
     """Extract profile names from LinkedIn URLs."""
@@ -74,18 +89,21 @@ def run_serp_scraper(user, password, runs, pages, start, query):
             f"Running request with query: '{query}', starting page: {str(start)}, run: {str(run)}..."
         )
         payload = {
-            "source": "google_search",
-            "user_agent_type": "desktop_chrome",
-            "parse": True,
-            "locale": "en-us",
-            "query": query,
-            "start_page": str(start),
-            "pages": str(pages),
-            "context": [
-                {"key": "filter", "value": 1},
-                {"key": "results_language", "value": "en"},
-            ],
-        }
+            'source': 'google_search',
+            'user_agent_type': 'desktop_chrome',
+            'parse': "true",
+            'limit': '100',
+            'query': query,
+            #"start_page": str(start),
+            #"pages": str(pages),
+            'locale': 'en-us',
+            'context': [ 
+                {'key': 'filter', "value": 1}, 
+                {'key': 'results_language', "value": 'en'}, 
+                {'key': 'nfpr', "value": True}
+                ],
+            }
+        
         response = requests.post(
             "https://realtime.oxylabs.io/v1/queries",
             auth=(user, password),
@@ -94,8 +112,12 @@ def run_serp_scraper(user, password, runs, pages, start, query):
         if not response.ok:
             print("ERROR! Bad response received.")
             print(response.text)
-            sys.exit(1)
-        profile_names.add(search_serp_results(response))
+            sys.exit(1)   
+            
+        run_results = search_serp_results(response)    
+        for result in run_results:
+            profile_names.add(result)
+        
         run_time = time.time() - run_start_time
         print(f"run {run} completed in {run_time:.2f} seconds. ")
         start = int(start) + pages
@@ -110,7 +132,7 @@ def scrape_linkedin(client, queries):
     for profile in queries:
         contact_info = client.get_profile_contact_info(profile)
         if contact_info:
-            results.add(contact_info)
+                print(str(contact_info["email_address"]))
     return results
 
 def get_credentials(prompt):
@@ -129,13 +151,23 @@ def main():
     args = parse_arguments()
     signal.signal(signal.SIGINT, handle_interrupt)
     
-    # Prompt for Oxylabs credentials if not provided
-    oxylabs_user = args.oxylabs_user if args.oxylabs_user else input("Enter Oxylabs username: ")
-    oxylabs_password = args.oxylabs_password if args.oxylabs_password else get_credentials("Enter Oxylabs password: ")
+    # Check if credentials are provided via command line arguments
+    if args.oxylabs_user and args.oxylabs_password and args.linkedin_user and args.linkedin_password:
+        oxylabs_user = args.oxylabs_user
+        oxylabs_password = args.oxylabs_password
+        linkedin_user = args.linkedin_user
+        linkedin_password = args.linkedin_password
+    else:
+        # Read credentials from config file
+        oxylabs_user, oxylabs_password, linkedin_user, linkedin_password = get_credentials_from_config()
 
-    # Prompt for LinkedIn credentials if not provided
-    linkedin_user = args.linkedin_user if args.linkedin_user else input("Enter LinkedIn username: ")
-    linkedin_password = args.linkedin_password if args.linkedin_password else get_credentials("Enter LinkedIn password: ")
+        # If not found in config, prompt the user for credentials
+        if not (oxylabs_user and oxylabs_password and linkedin_user and linkedin_password):
+            print("Credentials not found in config file. Please enter them manually.")
+            oxylabs_user = input("Enter Oxylabs username: ")
+            oxylabs_password = getpass.getpass("Enter Oxylabs password: ")
+            linkedin_user = input("Enter LinkedIn username: ")
+            linkedin_password = getpass.getpass("Enter LinkedIn password: ")
 
     # Prompt for runs, pages, and start_page if not provided
     runs = args.runs if args.runs else get_input("Enter number of runs (default: 1): ", 1)
@@ -152,14 +184,12 @@ def main():
         print("error! unable to connect or authenticate with LinkedIn")
         exit(1)
 
-    serp_results = run_serp_scraper(oxylabs_user, oxylabs_password, runs, pages, start_page, "site:linkedin.com ohio mayor")
+    serp_results = run_serp_scraper(oxylabs_user, oxylabs_password, runs, pages, start_page, query)
+    linkedin_results = scrape_linkedin(client, serp_results)
+    
+    for result in linkedin_results:
+        print(str(result))
 
-    for run in serp_results:
-        linkedin_results = scrape_linkedin(client, run)
-        for contact in linkedin_results:
-            print(str(contact))    
-
-    client.logout()
 
 if __name__ == "__main__":
     main()
