@@ -138,6 +138,19 @@ def get_input(prompt, default):
         return default
     return int(value) if value else 1
 
+def save_credentials_to_config(oxylabs_user, oxylabs_password, linkedin_user, linkedin_password):
+    """Save credentials to config file."""
+    try:
+        config = configparser.ConfigParser()
+        config["Oxylabs"] = {"username": oxylabs_user, "password": oxylabs_password}
+        config["LinkedIn"] = {"username": linkedin_user, "password": linkedin_password}
+
+        with open("credentials.ini", "w") as configfile:
+            config.write(configfile)
+        print("Credentials saved successfully.")
+    except Exception as e:
+        print(f"Error occurred while saving credentials: {str(e)}")
+
 def main():
     """Main function."""
     args = parse_arguments()
@@ -152,6 +165,18 @@ def main():
     else:
         # Read credentials from config file
         oxylabs_user, oxylabs_password, linkedin_user, linkedin_password = get_credentials_from_config()
+
+        # If not found in config, prompt the user for credentials
+        if not (oxylabs_user and oxylabs_password and linkedin_user and linkedin_password):
+            print("Credentials not found in config file. Please enter them manually.")
+            oxylabs_user = input("Enter Oxylabs username: ")
+            oxylabs_password = getpass.getpass("Enter Oxylabs password: ")
+            linkedin_user = input("Enter LinkedIn username: ")
+            linkedin_password = getpass.getpass("Enter LinkedIn password: ")
+            
+            save_credentials = input("Do you want to save these credentials? (yes/no): ")
+            if save_credentials.lower() == "yes":
+                save_credentials_to_config(oxylabs_user, oxylabs_password, linkedin_user, linkedin_password)
 
         # If not found in config, prompt the user for credentials
         if not (oxylabs_user and oxylabs_password and linkedin_user and linkedin_password):
